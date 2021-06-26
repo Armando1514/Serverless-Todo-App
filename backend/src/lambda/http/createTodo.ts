@@ -1,6 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda'
 import * as middy from "middy";
-import { cors } from "middy/middlewares";
+import { cors, httpErrorHandler } from "middy/middlewares";
 import { CreateTodoRequest } from '../../requests/CreateTodoRequest'
 import { createTodo } from '../../businessLogic/todo';
 import { decodeJWTFromAPIGatewayEvent } from '../../auth/utils';
@@ -27,4 +27,4 @@ handler.use(
   cors({
     credentials: true,
   })
-);
+).use(httpErrorHandler());

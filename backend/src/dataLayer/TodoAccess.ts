@@ -2,8 +2,9 @@ import * as AWS from "aws-sdk";
 import * as AWSXRay from "aws-xray-sdk";
 import { DocumentClient } from "aws-sdk/clients/dynamodb";
 import { createLogger } from '../utils/logger'
-
 import { Todo } from "../models/Todo";
+import { UpdateTodoRequest } from "../requests/UpdateTodoRequest";
+
 
 const logger = createLogger('todo')
 
@@ -23,6 +24,9 @@ async getAllTodosForUser(userId: String): Promise<any>{
       TableName: this.todoTable,
       IndexName: this.todoIndex,
       KeyConditionExpression: "userId = :userId",
+      ExpressionAttributeValues: {
+        ":userId": userId,
+      }
     })
     .promise();
 
@@ -49,15 +53,29 @@ async createTodo(todo: Todo): Promise<Todo>{
 
   }
 
-async updateTodo(oldToDo: Todo, newTodo: Todo): Promise<any>{
-    console.log("To implement");
-
+async updateTodo(todoId: String, updatedTodo: UpdateTodoRequest): Promise<void>{
+    await this.docClient.update({
+        TableName: this.todoTable,
+        Key: {
+            todoId
+        },
+        UpdateExpression: "set name = :name, dueDate = :dueDate, done =: done",
+        ExpressionAttributeValues:{
+            ":name": updatedTodo.name,
+            ":dueDate": updatedTodo.dueDate,
+            ":done": updatedTodo.done,
+        },
+    })
 }
 
 
-async deleteTodo(todoId: String): Promise<any>{
-    console.log("To implement");
-
+async deleteTodo(todoId: String): Promise<void>{
+    await this.docClient.update({
+        TableName: this.todoTable,
+        Key:{
+            "todoId": todoId,
+        }
+    });
   }
 
 

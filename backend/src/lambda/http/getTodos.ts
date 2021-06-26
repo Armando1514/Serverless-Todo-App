@@ -2,7 +2,7 @@ import 'source-map-support/register'
 
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda'
 import * as middy from "middy";
-import { cors } from "middy/middlewares";
+import { cors, httpErrorHandler } from "middy/middlewares";
 import { getAllTodosForUser } from '../../businessLogic/todo';
 import { decodeJWTFromAPIGatewayEvent } from '../../auth/utils';
 
@@ -11,7 +11,7 @@ export const handler = middy(async (event: APIGatewayProxyEvent): Promise<APIGat
   // TODO: Get all TODO items for a current user
   const jwtToken = decodeJWTFromAPIGatewayEvent(event);
 
-  const result = await getAllTodosForUser(jwtToken);
+  const result = await  getAllTodosForUser(jwtToken);
   
   if (result.count !== 0)
   return {
@@ -33,4 +33,4 @@ handler.use(
   cors({
     credentials: true,
   })
-);
+).use(httpErrorHandler());

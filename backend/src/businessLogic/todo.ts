@@ -4,6 +4,7 @@ import { Todo } from "../models/Todo";
 import { TodoAccess } from "../dataLayer/TodoAccess";
 import { parseUserId } from "../auth/utils";
 import { CreateTodoRequest } from "../requests/CreateTodoRequest";
+import { UpdateTodoRequest } from "../requests/UpdateTodoRequest";
 
 const todoAccess = new TodoAccess();
 
@@ -31,3 +32,11 @@ export async function createTodo(
   } as Todo);
 
   }
+
+export async function updateTodo(todoId: String, updatedTodo: UpdateTodoRequest): Promise<void>{
+     todoAccess.updateTodo(todoId, updatedTodo);
+}
+
+export async function deleteTodo(todoId: String): Promise<void>{
+  todoAccess.deleteTodo(todoId);
+}

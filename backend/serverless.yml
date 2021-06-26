@@ -45,7 +45,7 @@ functions:
     handler: src/lambda/auth/auth0Authorizer.handler
 
   # TODO: Configure this function
-  createTodo:
+  CreateTodo:
     handler: src/lambda/http/createTodo.handler
     events:
       - http:
@@ -64,13 +64,19 @@ functions:
 
 
   # TODO: Configure this function
-  getTodos:
+  GetTodos:
     handler: src/lambda/http/getTodos.handler
     events:
       - http:
           method: get
           path: todos
           cors: true
+          authorizer: Auth      
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:Query
+        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODOS_TABLE}
 
   # TODO: Configure this function
   UpdateTodo:
@@ -79,6 +85,15 @@ functions:
       - http:
           method: patch
           path: todos/{todoId}
+          authorizer: Auth
+          request:
+            schema:
+               application/json:${file(models/update-todo-request.json)}
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:Update
+        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODOS_TABLE}
 
   # TODO: Configure this function
   DeleteTodo:
@@ -87,6 +102,11 @@ functions:
       - http:
           method: delete
           path: todos/{todoId}
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:Delete
+        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODOS_TABLE}
 
   # TODO: Configure this function
   GenerateUploadUrl:
