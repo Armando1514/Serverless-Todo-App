@@ -1,98 +1,138 @@
 import * as AWS from "aws-sdk";
 import * as AWSXRay from "aws-xray-sdk";
 import { DocumentClient } from "aws-sdk/clients/dynamodb";
-import { createLogger } from '../utils/logger'
 import { Todo } from "../models/Todo";
 import { UpdateTodoRequest } from "../requests/UpdateTodoRequest";
 
-
-const logger = createLogger('todo')
-
 const XAWS = AWSXRay.captureAWS(AWS);
 
-export class TodoAccess{
-    constructor (
-        private readonly docClient: DocumentClient = createDynamoDBClient(),
-        private readonly todoTable = process.env.TODOS_TABLE,
-        private readonly todoIndex = process.env.TODO_USER_INDEX
-    ){}
-
-
-async getAllTodosForUser(userId: String): Promise<any>{
-    const result = await this.docClient
-    .query({
-      TableName: this.todoTable,
-      IndexName: this.todoIndex,
-      KeyConditionExpression: "userId = :userId",
-      ExpressionAttributeValues: {
-        ":userId": userId,
-      }
+export class TodoAccess {
+  constructor(
+    private readonly docClient: DocumentClient = createDynamoDBClient(),
+    private readonly todoTable = process.env.TODOS_TABLE,
+    private readonly todoIndex = process.env.TODO_USER_INDEX,
+    private readonly bucketName = process.env.IMAGES_S3_BUCKET,
+    private readonly urlExpiration = process.env.S3_URL_EXPIRATION,
+    private readonly s3 = new XAWS.S3({
+      signatureVersion: "v4",
     })
-    .promise();
+  ) {}
+
+  async getAllTodosForUser(userId: String): Promise<any> {
+    const result = this.docClient
+      .query({
+        TableName: this.todoTable,
+        IndexName: this.todoIndex,
+        KeyConditionExpression: "userId = :userId",
+        ExpressionAttributeValues: {
+          ":userId": userId,
+        },
+      })
+      .promise();
 
     return result;
-
   }
 
-async createTodo(todo: Todo): Promise<Todo>{
-    await this.docClient
-    .put({
-      TableName: this.todoTable,
-      Item: todo,
-    })
-    .promise();
-
-    logger.info('TODO created', {
-        // Additional information stored with a log statement
-        key: todo.todoId,
-        userId: todo.userId,
-        date: new Date().toISOString
+  async createTodo(todo: Todo): Promise<Todo> {
+    this.docClient
+      .put({
+        TableName: this.todoTable,
+        Item: todo,
       })
-    
-  return todo;
+      .promise();
 
+    return todo;
   }
 
-async updateTodo(todoId: String, updatedTodo: UpdateTodoRequest): Promise<void>{
-    await this.docClient.update({
+  async updateTodo(
+    todoId: String,
+    updatedTodo: UpdateTodoRequest,
+    userId: String
+  ): Promise<void> {
+    console.log("Updating todoId: ", todoId, " userId: ", userId);
+
+    this.docClient.update(
+      {
         TableName: this.todoTable,
         Key: {
-            todoId
+          todoId,
+          userId,
         },
-        UpdateExpression: "set name = :name, dueDate = :dueDate, done =: done",
-        ExpressionAttributeValues:{
-            ":name": updatedTodo.name,
-            ":dueDate": updatedTodo.dueDate,
-            ":done": updatedTodo.done,
+        UpdateExpression: "set #name = :n, #dueDate = :due, #done = :d",
+        ExpressionAttributeValues: {
+          ":n": updatedTodo.name,
+          ":due": updatedTodo.dueDate,
+          ":d": updatedTodo.done,
         },
-    })
+        ExpressionAttributeNames: {
+          "#name": "name",
+          "#dueDate": "dueDate",
+          "#done": "done",
+        },
+      },
+      function (err, data) {
+        if (err) {
+          console.log("ERRROR " + err);
+          throw new Error("Error " + err);
+        } else {
+          console.log("Element updated " + data);
+        }
+      }
+    );
+  }
+
+  async deleteTodo(todoId: String, userId: String): Promise<void> {
+    this.docClient.delete(
+      {
+        TableName: this.todoTable,
+        Key: {
+          todoId,
+          userId,
+        },
+      },
+      function (err, data) {
+        if (err) {
+          console.log("ERRROR " + err);
+          throw new Error("Error " + err);
+        } else {
+          console.log("Element deleted " + data);
+        }
+      }
+    );
+  }
+  async getPresignedImageUrl(
+    todoId: String,
+    imageId: String,
+    userId: String
+  ): Promise<string> {
+    const attachmentUrl = await this.s3.getSignedUrl("putObject", {
+      Bucket: this.bucketName,
+      Key: imageId,
+      Expires: this.urlExpiration,
+    });
+    this.docClient.update({
+      TableName: this.todoTable,
+      Key: {
+        todoId,
+        userId,
+      },
+      UpdateExpression: "set attachmentUrl = :attachmentUrl",
+      ExpressionAttributeValues: {
+        ":attachmentUrl": attachmentUrl,
+      },
+    });
+    return attachmentUrl;
+  }
 }
 
-
-async deleteTodo(todoId: String): Promise<void>{
-    await this.docClient.update({
-        TableName: this.todoTable,
-        Key:{
-            "todoId": todoId,
-        }
+function createDynamoDBClient() {
+  if (process.env.IS_OFFLINE) {
+    console.log("Creating a local DynamoDB instance");
+    return new XAWS.DynamoDB.DocumentClient({
+      region: "localhost",
+      endpoint: "http://localhost:8000",
     });
   }
 
-
-
+  return new XAWS.DynamoDB.DocumentClient();
 }
-
-
-
-
-function createDynamoDBClient() {
-    if (process.env.IS_OFFLINE) {
-      console.log("Creating a local DynamoDB instance");
-      return new XAWS.DynamoDB.DocumentClient({
-        region: "localhost",
-        endpoint: "http://localhost:8000",
-      });
-    }
-  
-    return new XAWS.DynamoDB.DocumentClient();
-  }

@@ -1,42 +1,51 @@
-import * as uuid from "uuid";
-
 import { Todo } from "../models/Todo";
 import { TodoAccess } from "../dataLayer/TodoAccess";
-import { parseUserId } from "../auth/utils";
 import { CreateTodoRequest } from "../requests/CreateTodoRequest";
 import { UpdateTodoRequest } from "../requests/UpdateTodoRequest";
+import { String } from "aws-sdk/clients/appstream";
 
 const todoAccess = new TodoAccess();
 
-export async function getAllTodosForUser(jwtToken: string): Promise<any> {
-    const userId = parseUserId(jwtToken);
-    return todoAccess.getAllTodosForUser(userId);
+export async function getAllTodosForUser(userId: string): Promise<any> {
+  return todoAccess.getAllTodosForUser(userId);
 }
 
 export async function createTodo(
-    createTodoRequest: CreateTodoRequest,
-    jwtToken: string
-  ): Promise<Todo> {
-
-    const itemId = uuid.v4();
-    const userId = parseUserId(jwtToken);
-
-
-  return await todoAccess.createTodo({
-    todoId: itemId,
+  todoId: String,
+  createTodoRequest: CreateTodoRequest,
+  userId: string
+): Promise<Todo> {
+  const todo = todoAccess.createTodo({
+    todoId: todoId,
     userId: userId,
     name: createTodoRequest.name,
     dueDate: createTodoRequest.dueDate,
-    done:  false,
+    done: false,
     attachmentUrl: undefined,
   } as Todo);
 
-  }
-
-export async function updateTodo(todoId: String, updatedTodo: UpdateTodoRequest): Promise<void>{
-     todoAccess.updateTodo(todoId, updatedTodo);
+  return todo;
 }
 
-export async function deleteTodo(todoId: String): Promise<void>{
-  todoAccess.deleteTodo(todoId);
+export async function updateTodo(
+  todoId: String,
+  updatedTodo: UpdateTodoRequest,
+  userId: String
+): Promise<void> {
+  todoAccess.updateTodo(todoId, updatedTodo, userId);
+}
+
+export async function deleteTodo(
+  todoId: String,
+  userId: String
+): Promise<void> {
+  todoAccess.deleteTodo(todoId, userId);
+}
+
+export async function getPresignedImageUrl(
+  todoId: String,
+  imageId: String,
+  userId: String
+): Promise<string> {
+  return todoAccess.getPresignedImageUrl(todoId, imageId, userId);
 }

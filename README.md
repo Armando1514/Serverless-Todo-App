@@ -1,4 +1,4 @@
-# Serverless-TODO-app
+# Serverless Todo App
 
 Project that implements a simple TODO application using AWS Lambda and Serverless framework. Search for all comments starting with the `TODO:` in the code to find the placeholders implemented. 
 This repositoty is a project assignment for the Udacity Cloud Developer Nanodegree program. 
@@ -156,9 +156,9 @@ logger.info('User was authorized', {
 ```
 
 
-# Design Choices
+# Database Model
 
-To store TODO items, I have decided to use DynamoDB table with local secondary index(es). I have created a local secondary index that you can find in 'serverless.yaml':
+To store TODO items, I have decided to use DynamoDB table with local secondary index(es). 
 
 ```yml
 
@@ -179,15 +179,7 @@ TodosTable:
         KeyType: RANGE
     BillingMode: PAY_PER_REQUEST
     TableName: ${self:provider.environment.TODOS_TABLE}
-    LocalSecondaryIndexes:
-      - IndexName: ${self:provider.environment.INDEX_NAME}
-        KeySchema:
-          - AttributeName: partitionKey
-            KeyType: HASH
-          - AttributeName: indexKey
-            KeyType: RANGE
-        Projection:
-          ProjectionType: ALL # What attributes will be copied to an index
+
 
 ```
 
@@ -197,7 +189,6 @@ To query an index you need to use the `query()` method like:
 await this.dynamoDBClient
   .query({
     TableName: 'table-name',
-    IndexName: 'index-name',
     KeyConditionExpression: 'paritionKey = :paritionKey',
     ExpressionAttributeValues: {
       ':paritionKey': partitionKeyValue
@@ -229,6 +220,16 @@ npm run start
 ```
 
 This should start a development server with the React application that will interact with the serverless TODO application.
+
+# How to deploy the application to AWS
+
+I am assuming that you already have configured your AWS account in your terminal, and already installed [aws CLI](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-install.html) and  [serverless framework](https://www.serverless.com/blog/quick-tips-for-faster-serverless-development).
+Type the following commands in your terminal (assuming that you are in the root project):
+```
+cd backend
+export NODE_OPTIONS=--max_old_space_size=4096
+sls deploy -v
+```
 
 # Postman collection
 

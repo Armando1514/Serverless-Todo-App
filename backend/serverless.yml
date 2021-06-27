@@ -5,42 +5,35 @@ plugins:
   - serverless-webpack
   - serverless-iam-roles-per-function
 
+package:
+  individually: true
+
 provider:
   name: aws
-  runtime: nodejs12.x
-
+  runtime: nodejs10.x
   stage: ${opt:stage, 'dev'}
   region: ${opt:region, 'us-east-1'}
+  tracing:
+    lambda: true
+    apiGateway: true
 
   environment:
     TODOS_TABLE: Todo-${self:provider.stage}
     TODO_USER_INDEX: TodoUserIndex
-
+    IMAGES_S3_BUCKET: 1523563-serverless-udagram-images-${self:provider.stage} #CHANGE IT, BECAUSE THE BUCKET MUST HAVE A GLOBAL UNIQUE IDENTIFIER, OTHERWISE THIS SCRIPT WILL NOT WORK.
+    S3_URL_EXPIRATION: 300
 
 custom:
   topicName: todoTopic-${self:provider.stage}
 
-  dynamodb:
-    start:
-      port: 8000
-      inMemory: true
-      migrate: true
-
-  serverless-offline:
-  port: 3003
   documentation:
     api:
       info:
         version: v1.0.0
         title: Udagram API
         description: Serverless application for images sharing
-    models:
-      - name: GroupRequest
-        contentType: application/json
-        schema: ${file(models/create-group-request.json)}
 
 functions:
-
   Auth:
     handler: src/lambda/auth/auth0Authorizer.handler
 
@@ -55,13 +48,12 @@ functions:
           authorizer: Auth
           request:
             schema:
-               application/json:${file(models/create-todo-request.json)}
+              application/json: ${file(models/create-todo-request.json)}
     iamRoleStatements:
       - Effect: Allow
         Action:
           - dynamodb:PutItem
         Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODOS_TABLE}
-
 
   # TODO: Configure this function
   GetTodos:
@@ -71,12 +63,17 @@ functions:
           method: get
           path: todos
           cors: true
-          authorizer: Auth      
+          authorizer: Auth
     iamRoleStatements:
       - Effect: Allow
         Action:
           - dynamodb:Query
         Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODOS_TABLE}
+      - Effect: Allow
+        Action:
+          - dynamodb:Query
+          - dynamodb:Scan
+        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODOS_TABLE}/index/${self:provider.environment.TODO_USER_INDEX}
 
   # TODO: Configure this function
   UpdateTodo:
@@ -86,13 +83,14 @@ functions:
           method: patch
           path: todos/{todoId}
           authorizer: Auth
+          cors: true
           request:
             schema:
-               application/json:${file(models/update-todo-request.json)}
+              application/json: ${file(models/update-todo-request.json)}
     iamRoleStatements:
       - Effect: Allow
         Action:
-          - dynamodb:Update
+          - dynamodb:UpdateItem
         Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODOS_TABLE}
 
   # TODO: Configure this function
@@ -102,10 +100,12 @@ functions:
       - http:
           method: delete
           path: todos/{todoId}
+          cors: true
+          authorizer: Auth
     iamRoleStatements:
       - Effect: Allow
         Action:
-          - dynamodb:Delete
+          - dynamodb:DeleteItem
         Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODOS_TABLE}
 
   # TODO: Configure this function
@@ -115,10 +115,19 @@ functions:
       - http:
           method: post
           path: todos/{todoId}/attachment
+          cors: true
+          authorizer: Auth
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - s3:PutObject
+          - s3:GetObject
+        Resource: arn:aws:s3:::${self:provider.environment.IMAGES_S3_BUCKET}/*
 
 resources:
   Resources:
     # TODO: Add any necessary AWS resources
+    GatewayResponseDefault4XX:
       Type: "AWS::ApiGateway::GatewayResponse"
       Properties:
         ResponseParameters:
@@ -128,31 +137,60 @@ resources:
         ResponseType: DEFAULT_4XX
         RestApiId:
           Ref: ApiGatewayRestApi
-          GroupsDynamoDBTable:
 
+    # DynamoDB
+    TodoTable:
       Type: AWS::DynamoDB::Table
       Properties:
         AttributeDefinitions:
-          - AttributeName: userId
-            AttributeType: S
           - AttributeName: todoId
             AttributeType: S
-          - AttributeName: dateDue
+          - AttributeName: userId
             AttributeType: S
         KeySchema:
-         - AttributeName: userId
-           KeyType: HASH
-         - AttributeName: todoId
-           KeyType: RANGE
+          - AttributeName: todoId
+            KeyType: HASH
+          - AttributeName: userId
+            KeyType: RANGE
         BillingMode: PAY_PER_REQUEST
         TableName: ${self:provider.environment.TODOS_TABLE}
-        LocalSecondaryIndexes:
+        GlobalSecondaryIndexes:
           - IndexName: ${self:provider.environment.TODO_USER_INDEX}
             KeySchema:
               - AttributeName: userId
                 KeyType: HASH
-              - AttributeName: dateDue
-                KeyType: RANGE
             Projection:
-                 ProjectionType: ALL # What attributes will be copied to an index
+              ProjectionType: ALL
 
+    AttachmentsBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:provider.environment.IMAGES_S3_BUCKET}
+        CorsConfiguration:
+          CorsRules:
+            - AllowedOrigins:
+                - "*"
+              AllowedHeaders:
+                - "*"
+              AllowedMethods:
+                - GET
+                - PUT
+                - POST
+                - DELETE
+                - HEAD
+              MaxAge: 3000
+    BucketPolicy:
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        PolicyDocument:
+          Id: MyPolicy
+          Version: "2012-10-17"
+          Statement:
+            - Sid: PublicReadForGetBucketObjects
+              Effect: Allow
+              Principal: "*"
+              Action:
+                - s3:GetObject
+                - s3:PutObject
+              Resource: "arn:aws:s3:::${self:provider.environment.IMAGES_S3_BUCKET}/*"
+        Bucket: !Ref AttachmentsBucket
