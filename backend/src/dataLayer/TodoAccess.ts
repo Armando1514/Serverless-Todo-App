@@ -110,17 +110,28 @@ export class TodoAccess {
       Key: imageId,
       Expires: this.urlExpiration,
     });
-    this.docClient.update({
-      TableName: this.todoTable,
-      Key: {
-        todoId,
-        userId,
+
+    this.docClient.update(
+      {
+        TableName: this.todoTable,
+        Key: {
+          todoId,
+          userId,
+        },
+        UpdateExpression: "set attachmentUrl = :attachmentUrl",
+        ExpressionAttributeValues: {
+          ":attachmentUrl": `https://${this.bucketName}.s3.amazonaws.com/${imageId}`,
+        },
       },
-      UpdateExpression: "set attachmentUrl = :attachmentUrl",
-      ExpressionAttributeValues: {
-        ":attachmentUrl": attachmentUrl,
-      },
-    });
+      function (err, data) {
+        if (err) {
+          console.log("ERRROR " + err);
+          throw new Error("Error " + err);
+        } else {
+          console.log("Element updated " + data);
+        }
+      }
+    );
     return attachmentUrl;
   }
 }
